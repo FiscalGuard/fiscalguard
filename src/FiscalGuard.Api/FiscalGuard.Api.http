@@ -1,0 +1,6 @@
+@FiscalGuard.Api_HostAddress = http://localhost:5027
+
+GET {{FiscalGuard.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

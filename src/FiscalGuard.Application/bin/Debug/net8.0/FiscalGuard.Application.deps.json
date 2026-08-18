@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "FiscalGuard.Application/1.0.0": {
+        "dependencies": {
+          "FiscalGuard.Domain": "1.0.0"
+        },
+        "runtime": {
+          "FiscalGuard.Application.dll": {}
+        }
+      },
+      "FiscalGuard.Domain/1.0.0": {
+        "runtime": {
+          "FiscalGuard.Domain.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "FiscalGuard.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "FiscalGuard.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

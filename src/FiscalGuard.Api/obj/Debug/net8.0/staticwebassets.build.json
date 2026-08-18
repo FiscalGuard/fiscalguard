@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "tMTI5rDfOwXLxFwPSP7G6Kw2W+XiNqy7AEP0egMkvkk=",
+  "Source": "FiscalGuard.Api",
+  "BasePath": "_content/FiscalGuard.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

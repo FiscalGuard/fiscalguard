@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fiscalguard-postgres
+    environment:
+      POSTGRES_DB: fiscalguard
+      POSTGRES_USER: fiscalguard
+      POSTGRES_PASSWORD: fiscalguard_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - fiscalguard_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fiscalguard -d fiscalguard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  fiscalguard_postgres:
