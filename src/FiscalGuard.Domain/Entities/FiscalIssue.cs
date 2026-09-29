@@ -12,6 +12,8 @@ public sealed class FiscalIssue : Entity, IOrganizationScoped
     public IssueStatus Status { get; set; } = IssueStatus.Open;
     public IssueOrigin Origin { get; set; } = IssueOrigin.FiscalConsultation;
     public string? ExternalIdentifier { get; set; }
+    public string? Recommendation { get; set; }
+    public string EvidenceType { get; set; } = "Dado derivado";
     public DateTimeOffset DetectedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ResolvedAt { get; set; }
     public Guid? AssignedToUserId { get; set; }

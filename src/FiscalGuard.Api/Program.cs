@@ -2,6 +2,7 @@ using FiscalGuard.Api;
 using FiscalGuard.Infrastructure;
 using FiscalGuard.Infrastructure.Seed;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,7 +32,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<FiscalGuardDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    await BaselineEnsureCreatedDevelopmentDatabaseAsync(db);
+    await db.Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<DevelopmentSeeder>().SeedAsync(CancellationToken.None);
 }
 
@@ -46,3 +48,29 @@ app.MapHealthChecks("/health/ready");
 app.MapControllers();
 
 app.Run();
+
+static async Task BaselineEnsureCreatedDevelopmentDatabaseAsync(FiscalGuardDbContext db)
+{
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+            "MigrationId" character varying(150) NOT NULL,
+            "ProductVersion" character varying(32) NOT NULL,
+            CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+        );
+        """);
+
+    await db.Database.ExecuteSqlRawAsync("""
+        INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+        SELECT '20260804235750_InitialCreate', '8.0.8'
+        WHERE EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'Companies'
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM "__EFMigrationsHistory"
+            WHERE "MigrationId" = '20260804235750_InitialCreate'
+        );
+        """);
+}

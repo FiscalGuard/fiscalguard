@@ -15,4 +15,13 @@ public sealed class IssuesController(IIssueService issueService) : ControllerBas
         [FromQuery] IssueStatus? status,
         CancellationToken cancellationToken) =>
         issueService.ListAsync(status, cancellationToken);
+
+    [HttpGet("{id:guid}")]
+    public Task<FiscalIssueDetailsDto> Get(Guid id, CancellationToken cancellationToken) =>
+        issueService.GetAsync(id, cancellationToken);
+
+    [HttpPatch("{id:guid}/status")]
+    [Authorize(Roles = $"{nameof(UserRole.Owner)},{nameof(UserRole.Administrator)},{nameof(UserRole.Accountant)},{nameof(UserRole.Assistant)}")]
+    public Task<FiscalIssueDetailsDto> UpdateStatus(Guid id, UpdateIssueStatusRequest request, CancellationToken cancellationToken) =>
+        issueService.UpdateStatusAsync(id, request, cancellationToken);
 }

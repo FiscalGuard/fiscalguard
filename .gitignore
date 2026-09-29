@@ -1,1 +1,14 @@
 *.dll
+*.exe
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+.vs/
+.tmp/
+
+bin/
+obj/
+
+frontend/dist/
+frontend/node_modules/

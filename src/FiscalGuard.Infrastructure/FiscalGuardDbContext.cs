@@ -72,10 +72,18 @@ public sealed class FiscalGuardDbContext(DbContextOptions<FiscalGuardDbContext> 
 
     private static void SeedPlans(ModelBuilder modelBuilder)
     {
+        var trialCreatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7361), TimeSpan.Zero);
+        var trialUpdatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7368), TimeSpan.Zero);
+        var freeCreatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7408), TimeSpan.Zero);
+        var freeUpdatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7409), TimeSpan.Zero);
+        var professionalCreatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7416), TimeSpan.Zero);
+        var professionalUpdatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7417), TimeSpan.Zero);
+        var officeCreatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7422), TimeSpan.Zero);
+        var officeUpdatedAt = new DateTimeOffset(new DateTime(2026, 8, 4, 23, 57, 48, 760, DateTimeKind.Unspecified).AddTicks(7423), TimeSpan.Zero);
         modelBuilder.Entity<Plan>().HasData(
-            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000001"), Code = "trial", Name = "Trial", CnpjLimit = 5, UserLimit = 3, TrialDays = 14, AutomatedMonitoring = false, EmailAlerts = false, FullHistory = false },
-            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000002"), Code = "free", Name = "Gratuito", CnpjLimit = 2, UserLimit = 1, TrialDays = 0, AutomatedMonitoring = false, EmailAlerts = false, FullHistory = false },
-            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000003"), Code = "professional", Name = "Profissional", CnpjLimit = 50, UserLimit = 8, TrialDays = 0, AutomatedMonitoring = true, EmailAlerts = true, FullHistory = true },
-            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000004"), Code = "office", Name = "Escritorio", CnpjLimit = 250, UserLimit = 30, TrialDays = 0, AutomatedMonitoring = true, EmailAlerts = true, FullHistory = true });
+            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000001"), Code = "trial", Name = "Trial", CnpjLimit = 5, UserLimit = 3, TrialDays = 14, AutomatedMonitoring = false, EmailAlerts = false, FullHistory = false, CreatedAt = trialCreatedAt, UpdatedAt = trialUpdatedAt },
+            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000002"), Code = "free", Name = "Gratuito", CnpjLimit = 2, UserLimit = 1, TrialDays = 0, AutomatedMonitoring = false, EmailAlerts = false, FullHistory = false, CreatedAt = freeCreatedAt, UpdatedAt = freeUpdatedAt },
+            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000003"), Code = "professional", Name = "Profissional", CnpjLimit = 50, UserLimit = 8, TrialDays = 0, AutomatedMonitoring = true, EmailAlerts = true, FullHistory = true, CreatedAt = professionalCreatedAt, UpdatedAt = professionalUpdatedAt },
+            new Plan { Id = Guid.Parse("10000000-0000-0000-0000-000000000004"), Code = "office", Name = "Escritorio", CnpjLimit = 250, UserLimit = 30, TrialDays = 0, AutomatedMonitoring = true, EmailAlerts = true, FullHistory = true, CreatedAt = officeCreatedAt, UpdatedAt = officeUpdatedAt });
     }
 }

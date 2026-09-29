@@ -169,11 +169,23 @@ namespace FiscalGuard.Infrastructure.Persistence.Migrations
                     b.Property<int>("FiscalStatus")
                         .HasColumnType("integer");
 
+                    b.Property<bool?>("IsMeiOption")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool?>("IsSimplesOption")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset?>("LastConsultedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LegalName")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MainCnaeCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MainCnaeDescription")
                         .HasColumnType("text");
 
                     b.Property<int>("MonitoringFrequency")
@@ -191,7 +203,32 @@ namespace FiscalGuard.Infrastructure.Persistence.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("text");
 
+                    b.Property<string>("PublicAddress")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicDataSource")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("PublicDataUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RegistrationStatus")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("RegistrationStatusDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("ResponsibleName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RiskLevel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("RiskScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RiskSummary")
                         .HasColumnType("text");
 
                     b.Property<string>("StateRegistration")
@@ -388,6 +425,10 @@ namespace FiscalGuard.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("DetectedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("EvidenceType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("ExternalIdentifier")
                         .HasColumnType("text");
 
@@ -399,6 +440,9 @@ namespace FiscalGuard.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Origin")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Recommendation")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("ResolvedAt")
                         .HasColumnType("timestamp with time zone");

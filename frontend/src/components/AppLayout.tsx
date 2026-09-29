@@ -1,4 +1,4 @@
-import { Bell, Building2, CreditCard, Gauge, LogOut, Settings, ShieldCheck, Users, ClipboardList } from 'lucide-react';
+import { Bell, Building2, CreditCard, Gauge, LogOut, Newspaper, Settings, ShieldCheck, Users, ClipboardList } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { clearSession, getSession } from '../services/session';
 
@@ -7,6 +7,7 @@ const items = [
   { to: '/app/empresas', label: 'Empresas', icon: Building2 },
   { to: '/app/pendencias', label: 'Pendencias', icon: ClipboardList },
   { to: '/app/alertas', label: 'Alertas', icon: Bell },
+  { to: '/app/radar', label: 'Radar regulatório', icon: Newspaper },
   { to: '/app/usuarios', label: 'Usuarios', icon: Users },
   { to: '/app/assinatura', label: 'Plano', icon: CreditCard },
   { to: '/app/configuracoes', label: 'Configuracoes', icon: Settings }

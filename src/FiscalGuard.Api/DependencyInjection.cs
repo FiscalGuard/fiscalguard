@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using FiscalGuard.Api.Security;
 using FiscalGuard.Application;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -25,7 +26,11 @@ public static class DependencyInjection
         ConfigureAuthentication(services, configuration);
 
         services.AddAuthorization();
-        services.AddControllers();
+        services.AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            });
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
 

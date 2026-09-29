@@ -9,7 +9,7 @@ public sealed class FiscalConsultation : Entity, IOrganizationScoped
     public bool Success { get; set; }
     public FiscalStatus NormalizedStatus { get; set; }
     public required string RawPayloadProtected { get; set; }
-    public string NormalizerVersion { get; set; } = "mock-v1";
+    public string NormalizerVersion { get; set; } = "fiscalguard-v1";
     public string? Error { get; set; }
     public long DurationMs { get; set; }
 }

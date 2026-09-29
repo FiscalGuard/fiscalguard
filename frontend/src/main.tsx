@@ -11,6 +11,7 @@ import { CompanyFormPage } from './features/companies/CompanyFormPage';
 import { CompanyDetailsPage } from './features/companies/CompanyDetailsPage';
 import { IssuesPage } from './features/issues/IssuesPage';
 import { AlertsPage } from './features/alerts/AlertsPage';
+import { RegulatoryRadarPage } from './features/radar/RegulatoryRadarPage';
 import { UsersPage } from './features/users/UsersPage';
 import { SubscriptionPage } from './features/subscription/SubscriptionPage';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: 'consultas', element: <CompanyDetailsPage mode="history" /> },
       { path: 'pendencias', element: <IssuesPage /> },
       { path: 'alertas', element: <AlertsPage /> },
+      { path: 'radar', element: <RegulatoryRadarPage /> },
       { path: 'usuarios', element: <UsersPage /> },
       { path: 'assinatura', element: <SubscriptionPage /> },
       { path: 'configuracoes', element: <SettingsPage /> },

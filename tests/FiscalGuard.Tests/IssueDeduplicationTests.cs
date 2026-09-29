@@ -3,6 +3,7 @@ using FiscalGuard.Domain;
 using FiscalGuard.Infrastructure;
 using FiscalGuard.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FiscalGuard.Tests;
 
@@ -23,7 +24,12 @@ public sealed class IssueDeduplicationTests
         db.Companies.Add(company);
         await db.SaveChangesAsync();
 
-        var service = new FiscalMonitoringService(db, new TestCurrentUserContext(organizationId, userId), new StaticFiscalDataProvider());
+        var processor = new FiscalMonitoringProcessor(
+            db,
+            new StaticFiscalDataProvider(),
+            new NoopNotificationService(),
+            NullLogger<FiscalMonitoringProcessor>.Instance);
+        var service = new FiscalMonitoringService(new TestCurrentUserContext(organizationId, userId), processor);
         await service.ConsultCompanyAsync(company.Id, CancellationToken.None);
         await service.ConsultCompanyAsync(company.Id, CancellationToken.None);
 
@@ -43,5 +49,10 @@ public sealed class IssueDeduplicationTests
             FiscalFinding[] findings = [new("same-finding", IssueType.MissingFiling, "Declaracao pendente", "Teste", IssueSeverity.High)];
             return Task.FromResult(new FiscalConsultationResult("test", FiscalStatus.Irregular, true, "{}", null, findings));
         }
+    }
+
+    private sealed class NoopNotificationService : INotificationService
+    {
+        public Task CreateForAlertAsync(Alert alert, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }
