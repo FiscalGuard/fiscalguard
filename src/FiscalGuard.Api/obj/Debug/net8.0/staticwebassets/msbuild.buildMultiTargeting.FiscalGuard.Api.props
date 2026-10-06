@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="..\build\FiscalGuard.Api.props" />
-</Project>
