@@ -29,6 +29,7 @@ const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'empresas', element: <CompaniesPage /> },
       { path: 'empresas/nova', element: <CompanyFormPage /> },
+      { path: 'empresas/:id/editar', element: <CompanyFormPage /> },
       { path: 'empresas/:id', element: <CompanyDetailsPage /> },
       { path: 'consultas', element: <CompanyDetailsPage mode="history" /> },
       { path: 'pendencias', element: <IssuesPage /> },

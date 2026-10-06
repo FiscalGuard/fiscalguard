@@ -47,6 +47,14 @@ public sealed class CompaniesController(
     public Task<CompanyDetails> Update(Guid id, CompanyRequest request, CancellationToken cancellationToken) =>
         companyService.UpdateAsync(id, request, cancellationToken);
 
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = $"{nameof(UserRole.Owner)},{nameof(UserRole.Administrator)},{nameof(UserRole.Accountant)}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        await companyService.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     [HttpPatch("{id:guid}/status")]
     [Authorize(Roles = $"{nameof(UserRole.Owner)},{nameof(UserRole.Administrator)},{nameof(UserRole.Accountant)}")]
     public Task<CompanyDetails> UpdateStatus(Guid id, UpdateCompanyStatusRequest request, CancellationToken cancellationToken) =>

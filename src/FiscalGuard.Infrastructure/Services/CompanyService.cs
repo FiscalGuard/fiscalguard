@@ -267,6 +267,80 @@ public sealed class CompanyService(
         return await ToDetailsAsync(company, cancellationToken);
     }
 
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var company = await GetCompanyAsync(id, cancellationToken);
+
+        var issueIds = await db.FiscalIssues
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var consultationIds = await db.FiscalConsultations
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var alertIds = await db.Alerts
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        if (issueIds.Count > 0)
+        {
+            await db.Notifications
+                .Where(x => x.OrganizationId == currentUser.OrganizationId && x.FiscalIssueId != null && issueIds.Contains(x.FiscalIssueId.Value))
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await db.FiscalIssueHistory
+                .Where(x => x.OrganizationId == currentUser.OrganizationId && issueIds.Contains(x.FiscalIssueId))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        if (alertIds.Count > 0)
+        {
+            await db.Notifications
+                .Where(x => x.OrganizationId == currentUser.OrganizationId && x.AlertId != null && alertIds.Contains(x.AlertId.Value))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        if (consultationIds.Count > 0)
+        {
+            await db.FiscalConsultationItems
+                .Where(x => x.OrganizationId == currentUser.OrganizationId && consultationIds.Contains(x.FiscalConsultationId))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        await db.FiscalIssues
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await db.FiscalStatusHistory
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await db.FiscalConsultations
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await db.Alerts
+            .Where(x => x.OrganizationId == currentUser.OrganizationId && x.CompanyId == id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        db.AuditLogs.Add(new AuditLog
+        {
+            OrganizationId = currentUser.OrganizationId,
+            UserId = currentUser.UserId,
+            Action = "company.deleted",
+            EntityName = nameof(Company),
+            EntityId = company.Id.ToString(),
+            BeforeValues = company.Cnpj
+        });
+
+        db.Companies.Remove(company);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<CompanyDetails> UpdateStatusAsync(Guid id, UpdateCompanyStatusRequest request, CancellationToken cancellationToken)
     {
         var company = await GetCompanyAsync(id, cancellationToken);

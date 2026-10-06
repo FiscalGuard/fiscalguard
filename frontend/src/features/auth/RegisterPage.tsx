@@ -32,5 +32,5 @@ export function RegisterPage() {
     }
   }
 
-  return <AuthForm title="Cadastro do escritorio" cta="Iniciar trial" error={error} onSubmit={submit} register />;
+  return <AuthForm title="Comece seu monitoramento" subtitle="Crie o acesso do escritório e importe a primeira carteira para demonstrar valor em poucos minutos." cta="Iniciar demonstração" error={error} onSubmit={submit} register />;
 }

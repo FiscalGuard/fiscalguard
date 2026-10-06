@@ -1,16 +1,18 @@
-import { AlertTriangle, BriefcaseBusiness, Clock, FileCheck2, Lightbulb, RefreshCw, ShieldCheck, Siren } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BriefcaseBusiness, Building2, Clock, FileCheck2, Lightbulb, Pencil, RefreshCw, ShieldCheck, Siren, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import type { CompanyDetails, FiscalConsultation, FiscalIssue } from '../../types/api';
 import { fiscalStatusMeta, riskClass, severityClass } from '../../utils/status';
 
 export function CompanyDetailsPage({ mode }: { mode?: 'history' }) {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [company, setCompany] = useState<CompanyDetails | null>(null);
   const [consultations, setConsultations] = useState<FiscalConsultation[]>([]);
   const [issues, setIssues] = useState<FiscalIssue[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   async function load() {
@@ -47,35 +49,79 @@ export function CompanyDetailsPage({ mode }: { mode?: 'history' }) {
     }
   }
 
+  async function deleteCompany() {
+    if (!id || !company) return;
+    const confirmed = window.confirm(`Remover "${company.legalName}" da carteira? O histórico de consultas, pendências e alertas vinculados a este CNPJ também será removido.`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await api(`/api/companies/${id}`, { method: 'DELETE' });
+      navigate('/app/empresas');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover empresa da carteira');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const meta = fiscalStatusMeta(company?.fiscalStatus);
   const sortedIssues = [...issues].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
   const mainInsight = company ? buildExpertInsight(company, sortedIssues) : null;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-fiscal-navy">{mode === 'history' ? 'Historico de consultas' : 'Detalhes da empresa'}</h1>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link to="/app/empresas" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-fiscal-blue">
+            <ArrowLeft size={16} /> Voltar para empresas
+          </Link>
+          <div className="mt-4 text-xs font-semibold uppercase tracking-wide text-fiscal-blue">Dossiê fiscal da carteira</div>
+          <h1 className="mt-1 text-3xl font-bold text-fiscal-navy">{mode === 'history' ? 'Histórico de consultas' : 'Detalhes da empresa'}</h1>
+        </div>
+        {company && (
+          <div className="flex flex-wrap gap-2">
+            <Link className="btn-secondary" to={`/app/empresas/${company.id}/editar`}>
+              <Pencil size={17} /> Editar empresa
+            </Link>
+            <button className="btn-secondary text-rose-700 hover:border-rose-300 hover:text-rose-700" onClick={deleteCompany} disabled={deleting}>
+              <Trash2 size={17} /> {deleting ? 'Removendo...' : 'Remover da carteira'}
+            </button>
+            <button className="btn-primary" onClick={consult} disabled={loading}>
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> {loading ? 'Consultando...' : 'Executar consulta'}
+            </button>
+          </div>
+        )}
+      </div>
       {error && <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
       {company && (
         <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
             <div>
-              <h2 className="text-xl font-semibold text-fiscal-navy">{company.legalName}</h2>
-              <p className="text-sm text-slate-500">{company.tradeName || 'Sem nome fantasia'} - {company.cnpj}</p>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-md bg-fiscal-mist text-fiscal-blue">
+                  <Building2 size={24} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-fiscal-navy">{company.legalName}</h2>
+                  <p className="text-sm text-slate-500">{company.tradeName || 'Sem nome fantasia'} - {formatCnpj(company.cnpj)}</p>
+                </div>
+              </div>
             </div>
             <span className="inline-flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
               <span className={`status-dot ${meta.color}`} /> {meta.label}
             </span>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-4">
-            <Info label="Responsavel" value={company.responsibleName || '-'} />
+            <Info label="Responsável" value={company.responsibleName || '-'} />
             <Info label="E-mail" value={company.email || '-'} />
             <Info label="Telefone" value={company.phone || '-'} />
-            <Info label="Pendencias abertas" value={String(company.openIssues)} />
+            <Info label="Pendências abertas" value={String(company.openIssues)} />
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <Info label="Situacao cadastral" value={company.registrationStatus || 'Nao consultada'} />
-            <Info label="Simples Nacional" value={company.isSimplesOption == null ? 'Nao informado' : company.isSimplesOption ? 'Optante' : 'Nao optante'} />
-            <Info label="MEI" value={company.isMeiOption == null ? 'Nao informado' : company.isMeiOption ? 'Optante' : 'Nao optante'} />
+            <Info label="Situação cadastral" value={company.registrationStatus || 'Não consultada'} />
+            <Info label="Simples Nacional" value={company.isSimplesOption == null ? 'Não informado' : company.isSimplesOption ? 'Optante' : 'Não optante'} />
+            <Info label="MEI" value={company.isMeiOption == null ? 'Não informado' : company.isMeiOption ? 'Optante' : 'Não optante'} />
             <div className="rounded-md bg-slate-50 p-3">
               <div className="text-xs uppercase text-slate-500">Score de risco</div>
               <div className={`mt-1 inline-flex rounded-md px-2 py-1 text-sm font-semibold ${riskClass(company.riskLevel)}`}>{company.riskLevel} {company.riskScore}</div>
@@ -83,18 +129,15 @@ export function CompanyDetailsPage({ mode }: { mode?: 'history' }) {
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <Info label="CNAE principal" value={company.mainCnaeCode ? `${company.mainCnaeCode} - ${company.mainCnaeDescription || ''}` : '-'} />
-            <Info label="Endereco publico" value={company.publicAddress || '-'} />
+            <Info label="Endereço público" value={company.publicAddress || '-'} />
           </div>
           {company.riskSummary && <p className="mt-4 rounded-md bg-blue-50 p-3 text-sm text-fiscal-navy">{company.riskSummary}</p>}
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <Coverage icon={FileCheck2} title="Dados publicos" status={company.publicDataSource ? 'Atualizados' : 'Aguardando consulta'} description={company.publicDataSource ? `${company.publicDataSource} - ${company.publicDataUpdatedAt ? new Date(company.publicDataUpdatedAt).toLocaleString('pt-BR') : ''}` : 'Execute a consulta para consolidar a fonte.'} />
-            <Coverage icon={ShieldCheck} title="Enquadramento" status={company.isSimplesOption ? 'Simples confirmado' : company.isSimplesOption === false ? 'Revisar enquadramento' : 'Nao informado'} description="Indicador publico usado para priorizar revisao da carteira." />
-            <Coverage icon={AlertTriangle} title="Priorizacao" status={`${company.riskLevel} ${company.riskScore}`} description="Score calculado a partir dos sinais encontrados." />
-            <Coverage icon={Lightbulb} title="Orientacao" status={issues.length > 0 ? `${issues.length} acoes` : 'Sem acao pendente'} description="Recomendações ficam registradas para a equipe contabil." />
+            <Coverage icon={FileCheck2} title="Dados públicos" status={company.publicDataSource ? 'Atualizados' : 'Aguardando consulta'} description={company.publicDataSource ? `${company.publicDataSource} - ${company.publicDataUpdatedAt ? new Date(company.publicDataUpdatedAt).toLocaleString('pt-BR') : ''}` : 'Execute a consulta para consolidar a fonte.'} />
+            <Coverage icon={ShieldCheck} title="Enquadramento" status={company.isSimplesOption ? 'Simples confirmado' : company.isSimplesOption === false ? 'Revisar enquadramento' : 'Não informado'} description="Indicador público usado para priorizar revisão da carteira." />
+            <Coverage icon={AlertTriangle} title="Priorização" status={`${company.riskLevel} ${company.riskScore}`} description="Score calculado a partir dos sinais encontrados." />
+            <Coverage icon={Lightbulb} title="Orientação" status={issues.length > 0 ? `${issues.length} ações` : 'Sem ação pendente'} description="Recomendações ficam registradas para a equipe contábil." />
           </div>
-          <button className="btn-primary mt-5" onClick={consult} disabled={loading}>
-            <RefreshCw size={18} /> {loading ? 'Consultando...' : 'Executar consulta manual'}
-          </button>
         </section>
       )}
 
@@ -172,9 +215,9 @@ export function CompanyDetailsPage({ mode }: { mode?: 'history' }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-slate-50 p-3">
+    <div className="min-w-0 rounded-md bg-slate-50 p-3">
       <div className="text-xs uppercase text-slate-500">{label}</div>
-      <div className="mt-1 font-medium text-fiscal-ink">{value}</div>
+      <div className="mt-1 break-words font-medium text-fiscal-ink">{value}</div>
     </div>
   );
 }
@@ -269,4 +312,10 @@ function severityRank(severity: unknown) {
   if (value === '2' || value === 'Medium') return 2;
   if (value === '1' || value === 'Low') return 1;
   return 0;
+}
+
+function formatCnpj(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 14) return value;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
 }

@@ -62,10 +62,10 @@ export function RegulatoryRadarPage() {
         <RadarMetric icon={ShieldCheck} label="Atos e notícias oficiais" value={String(officialAlerts)} />
         <RadarMetric icon={Sparkles} label="Cruzamentos com a carteira" value={String(impactedCompanies)} />
       </section>
-      <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-fiscal-navy">
+      {/* <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-fiscal-navy">
         Radar atualizado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
         {data.fromCache && data.cachedUntil ? `, usando cache válido até ${new Date(data.cachedUntil).toLocaleTimeString('pt-BR')}` : ', consultando a fonte oficial nesta atualização'}.
-      </div>
+      </div> */}
 
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="font-semibold text-fiscal-ink">Temas acompanhados</h2>

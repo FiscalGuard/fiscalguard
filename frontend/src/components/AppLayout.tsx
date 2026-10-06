@@ -5,7 +5,7 @@ import { clearSession, getSession } from '../services/session';
 const items = [
   { to: '/app/dashboard', label: 'Dashboard', icon: Gauge },
   { to: '/app/empresas', label: 'Empresas', icon: Building2 },
-  { to: '/app/pendencias', label: 'Pendencias', icon: ClipboardList },
+  // { to: '/app/pendencias', label: 'Pendencias', icon: ClipboardList },
   { to: '/app/alertas', label: 'Alertas', icon: Bell },
   { to: '/app/radar', label: 'Radar regulatório', icon: Newspaper },
   { to: '/app/usuarios', label: 'Usuarios', icon: Users },
@@ -40,7 +40,7 @@ export function AppLayout() {
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-5 backdrop-blur">
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <ShieldCheck size={18} className="text-fiscal-blue" />
-            Informacoes de carater informativo; consulte sempre os canais oficiais.
+            Informações de caráter informativo. Consulte sempre os canais oficiais.
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-fiscal-ink">{session?.name ?? 'Usuario'}</span>
