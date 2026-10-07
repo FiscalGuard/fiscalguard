@@ -101,6 +101,8 @@ dotnet ef database update --project src/FiscalGuard.Infrastructure --startup-pro
 dotnet run --project src/FiscalGuard.Api
 ```
 
+A API usa `UseAppHost=false`, então `dotnet run` inicia `FiscalGuard.Api.dll` pelo host `dotnet`, sem executar o `FiscalGuard.Api.exe` gerado localmente. Isso evita bloqueios de políticas do Windows aplicadas a executáveis na pasta do projeto.
+
 3. Rode o frontend:
 
 ```bash
