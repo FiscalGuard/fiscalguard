@@ -1,5 +1,9 @@
 using System.Net.Http.Json;
 using System.Net;
+using System.Diagnostics;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
@@ -29,6 +33,12 @@ public sealed class RegulatoryRadarService(
         "empresa de pequeno porte",
         "tributario",
         "nota fiscal",
+        "nfse",
+        "sped",
+        "dctfweb",
+        "efd-reinf",
+        "reforma tributaria",
+        "parcelamento",
         "icms",
         "iss"
     ];
@@ -50,7 +60,7 @@ public sealed class RegulatoryRadarService(
 
         if (!forceRefresh && CachedSummary is not null && CachedUntil > DateTimeOffset.UtcNow)
         {
-            return await EnrichWithPortfolioAsync(CachedSummary with { FromCache = true, CachedUntil = CachedUntil }, cancellationToken);
+            return await EnrichWithPortfolioAsync(CachedSummary with { FromCache = true, CachedUntil = CachedUntil }, false, cancellationToken);
         }
 
         await CacheLock.WaitAsync(cancellationToken);
@@ -58,7 +68,7 @@ public sealed class RegulatoryRadarService(
         {
             if (!forceRefresh && CachedSummary is not null && CachedUntil > DateTimeOffset.UtcNow)
             {
-                return await EnrichWithPortfolioAsync(CachedSummary with { FromCache = true, CachedUntil = CachedUntil }, cancellationToken);
+                return await EnrichWithPortfolioAsync(CachedSummary with { FromCache = true, CachedUntil = CachedUntil }, false, cancellationToken);
             }
 
             using var client = new HttpClient
@@ -67,23 +77,46 @@ public sealed class RegulatoryRadarService(
                 Timeout = TimeSpan.FromSeconds(15)
             };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("FiscalGuardTech-RegulatoryRadar/1.0");
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            var officialAlerts = (await FetchOfficialFeedsAsync(themes, cancellationToken))
+            var officialResult = await FetchOfficialFeedsAsync(themes, cancellationToken);
+            var diagnostics = officialResult.Diagnostics.ToList();
+            var officialAlerts = officialResult.Alerts
                 .OrderByDescending(x => x.PresentedAt ?? DateTimeOffset.MinValue)
                 .ToList();
 
             var legislativeAlerts = new List<RegulatoryAlertDto>();
+            var legislativeRun = StartRun("camara", "Câmara dos Deputados - Dados Abertos", $"{baseUrl}proposicoes");
+            var legislativeWatch = Stopwatch.StartNew();
             foreach (var theme in themes)
             {
                 try
                 {
-                    legislativeAlerts.AddRange(await FetchThemeAsync(client, theme, days, cancellationToken));
+                    var alerts = await FetchThemeAsync(client, theme, days, cancellationToken);
+                    legislativeAlerts.AddRange(alerts);
                 }
                 catch (Exception ex)
                 {
                     logger.LogWarning(ex, "Failed to fetch regulatory theme {Theme}", theme);
+                    legislativeRun = legislativeRun with
+                    {
+                        Success = false,
+                        Error = MergeError(legislativeRun.Error, $"{theme}: {ex.Message}")
+                    };
                 }
             }
+            legislativeWatch.Stop();
+            diagnostics.Add(legislativeRun with
+            {
+                FinishedAt = DateTimeOffset.UtcNow,
+                DurationMs = legislativeWatch.ElapsedMilliseconds,
+                DocumentsFound = legislativeAlerts.Count,
+                DocumentsAccepted = legislativeAlerts.GroupBy(x => x.Id).Count(),
+                StatusMessage = legislativeAlerts.Count == 0
+                    ? "A fonte respondeu, mas nenhum projeto passou pelos temas configurados."
+                    : "Proposições encontradas e normalizadas para o radar."
+            });
 
             var officialSlots = Math.Min(4, maxItems);
             var selectedOfficialAlerts = officialAlerts
@@ -113,9 +146,13 @@ public sealed class RegulatoryRadarService(
                 false,
                 CachedUntil,
                 themes,
+                diagnostics,
+                0,
+                0,
+                "Regras auditáveis por tema, regime tributário, CNAE, UF/município e tags da empresa. IA pode ser adicionada depois como apoio, sem substituir a evidência oficial.",
                 deduplicated);
 
-            return await EnrichWithPortfolioAsync(CachedSummary, cancellationToken);
+            return await EnrichWithPortfolioAsync(CachedSummary, true, cancellationToken);
         }
         finally
         {
@@ -123,29 +160,57 @@ public sealed class RegulatoryRadarService(
         }
     }
 
-    private async Task<IReadOnlyList<RegulatoryAlertDto>> FetchOfficialFeedsAsync(
+    private async Task<(IReadOnlyList<RegulatoryAlertDto> Alerts, IReadOnlyList<RegulatorySourceDiagnosticDto> Diagnostics)> FetchOfficialFeedsAsync(
         IReadOnlyList<string> themes,
         CancellationToken cancellationToken)
     {
         var feeds = GetOfficialFeeds();
         var alerts = new List<RegulatoryAlertDto>();
+        var diagnostics = new List<RegulatorySourceDiagnosticDto>();
 
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("FiscalGuardTech-RegulatoryRadar/1.0");
+        client.DefaultRequestHeaders.Accept.Clear();
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/rss+xml"));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
 
         foreach (var feed in feeds)
         {
+            var run = StartRun(BuildSourceKey(feed.Name), feed.Name, feed.Url);
+            var watch = Stopwatch.StartNew();
             try
             {
-                alerts.AddRange(await FetchOfficialFeedAsync(client, feed, themes, cancellationToken));
+                var result = await FetchOfficialFeedAsync(client, feed, themes, cancellationToken);
+                alerts.AddRange(result.Alerts);
+                watch.Stop();
+                diagnostics.Add(run with
+                {
+                    FinishedAt = DateTimeOffset.UtcNow,
+                    DurationMs = watch.ElapsedMilliseconds,
+                    DocumentsFound = result.DocumentsFound,
+                    DocumentsAccepted = result.Alerts.Count,
+                    StatusMessage = result.Alerts.Count == 0
+                        ? "Feed lido, mas nenhuma publicação combinou com os temas fiscais monitorados."
+                        : "Feed oficial lido e publicações fiscais normalizadas."
+                });
             }
             catch (Exception ex)
             {
+                watch.Stop();
                 logger.LogWarning(ex, "Failed to fetch official regulatory feed {Feed}", feed.Name);
+                diagnostics.Add(run with
+                {
+                    Success = false,
+                    FinishedAt = DateTimeOffset.UtcNow,
+                    DurationMs = watch.ElapsedMilliseconds,
+                    Error = ex.Message,
+                    StatusMessage = "Não foi possível ler esta fonte nesta atualização."
+                });
             }
         }
 
-        return alerts;
+        return (alerts, diagnostics);
     }
 
     private IReadOnlyList<OfficialFeedConfig> GetOfficialFeeds()
@@ -174,7 +239,7 @@ public sealed class RegulatoryRadarService(
             ];
     }
 
-    private static async Task<IReadOnlyList<RegulatoryAlertDto>> FetchOfficialFeedAsync(
+    private static async Task<(IReadOnlyList<RegulatoryAlertDto> Alerts, int DocumentsFound)> FetchOfficialFeedAsync(
         HttpClient client,
         OfficialFeedConfig feed,
         IReadOnlyList<string> themes,
@@ -185,25 +250,29 @@ public sealed class RegulatoryRadarService(
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         var document = await XDocument.LoadAsync(stream, LoadOptions.None, cancellationToken);
-        XNamespace rss = "http://purl.org/rss/1.0/";
-        XNamespace dc = "http://purl.org/dc/elements/1.1/";
 
-        return document
-            .Descendants(rss + "item")
+        var items = document
+            .Descendants()
+            .Where(x => x.Name.LocalName.Equals("item", StringComparison.OrdinalIgnoreCase))
             .Select(item => new
             {
-                Title = CleanText(item.Element(rss + "title")?.Value),
-                Link = CleanText(item.Element(rss + "link")?.Value),
-                Description = CleanText(item.Element(rss + "description")?.Value),
-                Type = CleanText(item.Element(dc + "type")?.Value),
-                Date = TryParseDate(item.Element(dc + "date")?.Value)
+                Title = CleanText(GetElementValue(item, "title")),
+                Link = CleanText(GetElementValue(item, "link")),
+                Description = CleanText(GetElementValue(item, "description")),
+                Type = CleanText(GetElementValue(item, "type")),
+                Date = TryParseDate(GetElementValue(item, "date")) ?? TryParseDate(GetElementValue(item, "pubDate"))
             })
+            .ToList();
+
+        var alerts = items
             .Where(item => IsContentItem(item.Type, item.Link))
             .Select(item => ToOfficialAlert(item.Title, item.Description, item.Link, item.Date, feed, themes))
             .Where(alert => alert is not null)
             .Select(alert => alert!)
             .Take(6)
             .ToList();
+
+        return (alerts, items.Count);
     }
 
     private static async Task<IReadOnlyList<RegulatoryAlertDto>> FetchThemeAsync(
@@ -258,6 +327,12 @@ public sealed class RegulatoryRadarService(
         {
             "tributario" => ["tributario", "tributaria", "tributacao", "imposto"],
             "nota fiscal" => ["nota fiscal", "documento fiscal", "nfs"],
+            "nfse" => ["nfse", "nfs-e", "nota fiscal de servico"],
+            "sped" => ["sped", "efd", "escrituracao fiscal"],
+            "dctfweb" => ["dctfweb", "dctf web"],
+            "efd-reinf" => ["efd-reinf", "reinf"],
+            "reforma tributaria" => ["reforma tributaria", "cbs", "ibs"],
+            "parcelamento" => ["parcelamento", "regularizacao"],
             "empresa de pequeno porte" => ["empresa de pequeno porte", "pequeno porte", "epp"],
             "mei" => ["microempreendedor individual", "mei"],
             "icms" => ["icms"],
@@ -392,7 +467,10 @@ public sealed class RegulatoryRadarService(
         return ClassifyImpact(text, theme);
     }
 
-    private async Task<RegulatoryRadarSummary> EnrichWithPortfolioAsync(RegulatoryRadarSummary summary, CancellationToken cancellationToken)
+    private async Task<RegulatoryRadarSummary> EnrichWithPortfolioAsync(
+        RegulatoryRadarSummary summary,
+        bool persist,
+        CancellationToken cancellationToken)
     {
         var companies = await db.Companies
             .AsNoTracking()
@@ -404,19 +482,24 @@ public sealed class RegulatoryRadarService(
                 x.Cnpj,
                 x.IsSimplesOption,
                 x.IsMeiOption,
+                x.MainCnaeCode,
                 x.MainCnaeDescription,
+                x.PublicAddress,
                 x.Tags
             })
             .ToListAsync(cancellationToken);
 
+        var alertMatches = new Dictionary<string, IReadOnlyList<RegulatoryAffectedCompanyDto>>();
         var alerts = summary.Alerts
             .Select(alert =>
             {
                 var affected = companies
-                    .Select(company => MatchCompany(alert, company.Id, company.LegalName, company.Cnpj, company.IsSimplesOption, company.IsMeiOption, company.MainCnaeDescription, company.Tags))
+                    .Select(company => MatchCompany(alert, company.Id, company.LegalName, company.Cnpj, company.IsSimplesOption, company.IsMeiOption, company.MainCnaeCode, company.MainCnaeDescription, company.PublicAddress, company.Tags))
                     .Where(x => x is not null)
                     .Select(x => x!)
+                    .OrderByDescending(x => x.Score)
                     .ToList();
+                alertMatches[alert.Id] = affected;
 
                 return alert with
                 {
@@ -426,7 +509,20 @@ public sealed class RegulatoryRadarService(
             })
             .ToList();
 
-        return summary with { Alerts = alerts };
+        if (persist)
+        {
+            await PersistRadarResultAsync(summary.Diagnostics, alerts, alertMatches, cancellationToken);
+        }
+
+        var documentsStored = await db.RegulatoryDocuments.CountAsync(x => x.OrganizationId == currentUser.OrganizationId, cancellationToken);
+        var matchesStored = await db.RegulatoryMatches.CountAsync(x => x.OrganizationId == currentUser.OrganizationId, cancellationToken);
+
+        return summary with
+        {
+            Alerts = alerts,
+            DocumentsStored = documentsStored,
+            MatchesStored = matchesStored
+        };
     }
 
     private static RegulatoryAffectedCompanyDto? MatchCompany(
@@ -436,37 +532,194 @@ public sealed class RegulatoryRadarService(
         string cnpj,
         bool? isSimplesOption,
         bool? isMeiOption,
+        string? cnaeCode,
         string? cnaeDescription,
+        string? publicAddress,
         string? tags)
     {
-        var text = $"{alert.Theme} {alert.Summary}".ToLowerInvariant();
-        if ((text.Contains("simples") || text.Contains("microempresa") || text.Contains("pequeno porte")) && isSimplesOption == true)
+        var text = Normalize($"{alert.Theme} {alert.Title} {alert.Summary}");
+        var score = 0;
+        var terms = new List<string>();
+        var reasons = new List<string>();
+
+        if ((text.Contains("simples") || text.Contains("microempresa") || text.Contains("pequeno porte") || text.Contains("cgsn")) && isSimplesOption == true)
         {
-            return new(id, legalName, cnpj, "Cliente optante pelo Simples Nacional ou pequeno porte.");
+            score += 45;
+            terms.Add("Simples Nacional");
+            reasons.Add("cliente optante pelo Simples Nacional ou pequeno porte");
         }
 
         if ((text.Contains("mei") || text.Contains("microempreendedor")) && isMeiOption == true)
         {
-            return new(id, legalName, cnpj, "Cliente marcado como MEI.");
+            score += 45;
+            terms.Add("MEI");
+            reasons.Add("cliente marcado como MEI");
         }
 
         if ((text.Contains("nfse") || text.Contains("nfs-e") || text.Contains("nota fiscal de servico") || text.Contains("iss")) &&
             TextContainsAny(cnaeDescription, "servico servicos contabilidade consultoria tecnologia desenvolvimento suporte manutencao"))
         {
-            return new(id, legalName, cnpj, "CNAE sugere prestação de serviços; tema pode afetar emissão de NFS-e/ISS.");
+            score += 35;
+            terms.Add("serviços/NFS-e/ISS");
+            reasons.Add("CNAE sugere prestação de serviços");
         }
 
-        if (TextContainsAny(cnaeDescription, text) || TextContainsAny(tags, text))
+        if (TextContainsAny(cnaeDescription, text))
         {
-            return new(id, legalName, cnpj, "Tema tem termos relacionados ao CNAE ou tags da empresa.");
+            score += 30;
+            terms.Add("CNAE");
+            reasons.Add("tema relacionado ao CNAE principal");
+        }
+
+        if (TextContainsAny(tags, text))
+        {
+            score += 30;
+            terms.Add("tags");
+            reasons.Add("tema relacionado às tags internas da empresa");
         }
 
         if (text.Contains("tribut") || text.Contains("imposto") || text.Contains("nota fiscal") || text.Contains("icms") || text.Contains("iss"))
         {
-            return new(id, legalName, cnpj, "Tema fiscal amplo que pode afetar rotinas de orientação e compliance.");
+            score += 15;
+            terms.Add("fiscal amplo");
+            reasons.Add("tema fiscal amplo que pode afetar rotinas de orientação e compliance");
         }
 
-        return null;
+        if (score <= 0)
+        {
+            return null;
+        }
+
+        return new(
+            id,
+            legalName,
+            cnpj,
+            string.Join("; ", reasons.Distinct()),
+            Math.Min(score, 100),
+            string.Join(", ", terms.Distinct()));
+    }
+
+    private async Task PersistRadarResultAsync(
+        IReadOnlyList<RegulatorySourceDiagnosticDto> diagnostics,
+        IReadOnlyList<RegulatoryAlertDto> alerts,
+        IReadOnlyDictionary<string, IReadOnlyList<RegulatoryAffectedCompanyDto>> matchesByAlertId,
+        CancellationToken cancellationToken)
+    {
+        var organizationId = currentUser.OrganizationId;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        foreach (var diagnostic in diagnostics)
+        {
+            db.RegulatorySourceRuns.Add(new RegulatorySourceRun
+            {
+                OrganizationId = organizationId,
+                SourceKey = diagnostic.SourceKey,
+                SourceName = diagnostic.SourceName,
+                StartedAt = ToUtc(diagnostic.StartedAt),
+                FinishedAt = ToUtc(diagnostic.FinishedAt),
+                Success = diagnostic.Success,
+                DocumentsFound = diagnostic.DocumentsFound,
+                DocumentsAccepted = diagnostic.DocumentsAccepted,
+                DurationMs = diagnostic.DurationMs,
+                Error = diagnostic.Error,
+                StatusMessage = diagnostic.StatusMessage
+            });
+        }
+
+        var externalIds = alerts.Select(x => BuildExternalId(x.Id)).Distinct().ToList();
+        var existingDocuments = await db.RegulatoryDocuments
+            .Where(x => x.OrganizationId == organizationId && externalIds.Contains(x.ExternalId))
+            .ToDictionaryAsync(x => x.ExternalId, cancellationToken);
+
+        foreach (var alert in alerts)
+        {
+            var externalId = BuildExternalId(alert.Id);
+            if (!existingDocuments.TryGetValue(externalId, out var document))
+            {
+                document = new RegulatoryDocument
+                {
+                    OrganizationId = organizationId,
+                    ExternalId = externalId,
+                    SourceKey = BuildSourceKey(alert.Source),
+                    SourceName = alert.Source,
+                    SourceType = alert.SourceType,
+                    Title = alert.Title,
+                    Summary = alert.Summary,
+                    SourceUrl = alert.SourceUrl,
+                    Theme = alert.Theme,
+                    ImpactLevel = alert.ImpactLevel,
+                    ImpactReason = alert.ImpactReason,
+                    BusinessImpact = alert.BusinessImpact,
+                    SuggestedAction = alert.SuggestedAction,
+                    RawText = $"{alert.Title}\n{alert.Summary}",
+                    SearchText = Normalize($"{alert.Title} {alert.Summary} {alert.Theme} {alert.SourceType}"),
+                    PresentedAt = ToUtc(alert.PresentedAt),
+                    CapturedAt = DateTimeOffset.UtcNow,
+                    RelevanceScore = ToRelevanceScore(alert.ImpactLevel)
+                };
+                db.RegulatoryDocuments.Add(document);
+                existingDocuments[externalId] = document;
+            }
+            else
+            {
+                document.SourceName = alert.Source;
+                document.SourceType = alert.SourceType;
+                document.Title = alert.Title;
+                document.Summary = alert.Summary;
+                document.SourceUrl = alert.SourceUrl;
+                document.Theme = alert.Theme;
+                document.ImpactLevel = alert.ImpactLevel;
+                document.ImpactReason = alert.ImpactReason;
+                document.BusinessImpact = alert.BusinessImpact;
+                document.SuggestedAction = alert.SuggestedAction;
+                document.SearchText = Normalize($"{alert.Title} {alert.Summary} {alert.Theme} {alert.SourceType}");
+                document.PresentedAt = ToUtc(alert.PresentedAt);
+                document.RelevanceScore = ToRelevanceScore(alert.ImpactLevel);
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        var documentIds = existingDocuments.Values.Select(x => x.Id).ToList();
+        var existingMatches = await db.RegulatoryMatches
+            .Where(x => x.OrganizationId == organizationId && documentIds.Contains(x.RegulatoryDocumentId))
+            .ToDictionaryAsync(x => $"{x.RegulatoryDocumentId}:{x.CompanyId}", cancellationToken);
+
+        foreach (var alert in alerts)
+        {
+            var document = existingDocuments[BuildExternalId(alert.Id)];
+            if (!matchesByAlertId.TryGetValue(alert.Id, out var matches))
+            {
+                continue;
+            }
+
+            foreach (var match in matches)
+            {
+                var key = $"{document.Id}:{match.Id}";
+                if (!existingMatches.TryGetValue(key, out var entity))
+                {
+                    db.RegulatoryMatches.Add(new RegulatoryMatch
+                    {
+                        OrganizationId = organizationId,
+                        RegulatoryDocumentId = document.Id,
+                        CompanyId = match.Id,
+                        Reason = match.Reason,
+                        MatchedTerms = match.MatchedTerms,
+                        Score = match.Score
+                    });
+                }
+                else
+                {
+                    entity.Reason = match.Reason;
+                    entity.MatchedTerms = match.MatchedTerms;
+                    entity.Score = match.Score;
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static bool IsContentItem(string type, string link)
@@ -548,11 +801,67 @@ public sealed class RegulatoryRadarService(
         return fallback;
     }
 
+    private static RegulatorySourceDiagnosticDto StartRun(string sourceKey, string sourceName, string? requestUrl) =>
+        new(
+            sourceKey,
+            sourceName,
+            true,
+            0,
+            0,
+            0,
+            null,
+            requestUrl is null ? "Consulta iniciada." : $"Consulta iniciada em {requestUrl}.",
+            DateTimeOffset.UtcNow,
+            null);
+
+    private static string? MergeError(string? current, string next) =>
+        string.IsNullOrWhiteSpace(current) ? next : $"{current} | {next}";
+
+    private static string? GetElementValue(XElement element, string localName) =>
+        element
+            .Elements()
+            .FirstOrDefault(x => x.Name.LocalName.Equals(localName, StringComparison.OrdinalIgnoreCase))
+            ?.Value;
+
+    private static string BuildSourceKey(string source)
+    {
+        var normalized = Normalize(source);
+        var key = Regex.Replace(normalized, "[^a-z0-9]+", "-").Trim('-');
+        return string.IsNullOrWhiteSpace(key) ? "fonte-oficial" : key[..Math.Min(80, key.Length)];
+    }
+
+    private static string BuildExternalId(string value)
+    {
+        if (value.Length <= 240)
+        {
+            return value;
+        }
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return $"sha256:{Convert.ToHexString(bytes).ToLowerInvariant()}";
+    }
+
+    private static int ToRelevanceScore(string impactLevel) =>
+        Normalize(impactLevel) switch
+        {
+            "critico" => 100,
+            "alto" => 80,
+            "medio" => 55,
+            "baixo" => 25,
+            _ => 10
+        };
+
     private static bool ContainsAny(string source, params string[] terms) =>
         terms.Any(term => source.Contains(Normalize(term)));
 
     private static DateTimeOffset? TryParseDate(string? value) =>
-        DateTimeOffset.TryParse(value, out var date) ? date : null;
+        DateTimeOffset.TryParse(value, out var date) ? ToUtc(date) : null;
+
+    private static DateTimeOffset ToUtc(DateTimeOffset value) =>
+        value.Offset == TimeSpan.Zero ? value : value.ToUniversalTime();
+
+    private static DateTimeOffset? ToUtc(DateTimeOffset? value) =>
+        value.HasValue ? ToUtc(value.Value) : null;
 
     private static string CleanText(string? value)
     {
@@ -598,11 +907,11 @@ public sealed class RegulatoryRadarService(
             return false;
         }
 
-        return source
-            .ToLowerInvariant()
+        var normalizedTarget = Normalize(target);
+        return Normalize(source)
             .Split([' ', ';', ',', '.', '-', '/'], StringSplitOptions.RemoveEmptyEntries)
             .Where(x => x.Length >= 4)
-            .Any(target.Contains);
+            .Any(normalizedTarget.Contains);
     }
 
     private sealed record CamaraProposicoesResponse(

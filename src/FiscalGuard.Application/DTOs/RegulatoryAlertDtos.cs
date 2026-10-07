@@ -20,7 +20,21 @@ public sealed record RegulatoryAffectedCompanyDto(
     Guid Id,
     string LegalName,
     string Cnpj,
-    string Reason);
+    string Reason,
+    int Score,
+    string MatchedTerms);
+
+public sealed record RegulatorySourceDiagnosticDto(
+    string SourceKey,
+    string SourceName,
+    bool Success,
+    int DocumentsFound,
+    int DocumentsAccepted,
+    long DurationMs,
+    string? Error,
+    string? StatusMessage,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? FinishedAt);
 
 public sealed record RegulatoryRadarSummary(
     DateTimeOffset GeneratedAt,
@@ -28,4 +42,8 @@ public sealed record RegulatoryRadarSummary(
     bool FromCache,
     DateTimeOffset? CachedUntil,
     IReadOnlyList<string> MonitoredThemes,
+    IReadOnlyList<RegulatorySourceDiagnosticDto> Diagnostics,
+    int DocumentsStored,
+    int MatchesStored,
+    string MatchingModel,
     IReadOnlyList<RegulatoryAlertDto> Alerts);
