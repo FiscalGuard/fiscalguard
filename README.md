@@ -101,7 +101,7 @@ dotnet ef database update --project src/FiscalGuard.Infrastructure --startup-pro
 dotnet run --project src/FiscalGuard.Api
 ```
 
-A API usa `UseAppHost=false`, então `dotnet run` inicia `FiscalGuard.Api.dll` pelo host `dotnet`, sem executar o `FiscalGuard.Api.exe` gerado localmente. Isso evita bloqueios de políticas do Windows aplicadas a executáveis na pasta do projeto.
+A API usa `UseAppHost=false`, então `dotnet run` inicia `FiscalGuard.Api.dll` pelo host `dotnet`, sem executar o `FiscalGuard.Api.exe` gerado localmente. Essa configuração não contorna políticas do Windows que também bloqueiam DLLs. Se aparecer o erro `0x800711C7`, consulte o evento 3077 em **Visualizador de Eventos > Logs de Aplicativos e Serviços > Microsoft > Windows > CodeIntegrity > Operational** para identificar a política ativa.
 
 3. Rode o frontend:
 
