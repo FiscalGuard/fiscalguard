@@ -24,6 +24,9 @@ public sealed class FiscalGuardDbContext(DbContextOptions<FiscalGuardDbContext> 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
+    public DbSet<RegulatoryDocument> RegulatoryDocuments => Set<RegulatoryDocument>();
+    public DbSet<RegulatorySourceRun> RegulatorySourceRuns => Set<RegulatorySourceRun>();
+    public DbSet<RegulatoryMatch> RegulatoryMatches => Set<RegulatoryMatch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +50,19 @@ public sealed class FiscalGuardDbContext(DbContextOptions<FiscalGuardDbContext> 
         modelBuilder.Entity<Plan>().HasIndex(x => x.Code).IsUnique();
         modelBuilder.Entity<Subscription>().HasIndex(x => x.OrganizationId);
         modelBuilder.Entity<RefreshToken>().HasIndex(x => x.TokenHash).IsUnique();
+        modelBuilder.Entity<RegulatoryDocument>().HasIndex(x => new { x.OrganizationId, x.ExternalId }).IsUnique();
+        modelBuilder.Entity<RegulatoryDocument>().HasIndex(x => new { x.OrganizationId, x.PresentedAt });
+        modelBuilder.Entity<RegulatoryDocument>().Property(x => x.ExternalId).HasMaxLength(260);
+        modelBuilder.Entity<RegulatoryDocument>().Property(x => x.SourceKey).HasMaxLength(80);
+        modelBuilder.Entity<RegulatoryDocument>().Property(x => x.SourceName).HasMaxLength(180);
+        modelBuilder.Entity<RegulatoryDocument>().Property(x => x.SourceType).HasMaxLength(80);
+        modelBuilder.Entity<RegulatoryDocument>().Property(x => x.Theme).HasMaxLength(80);
+        modelBuilder.Entity<RegulatoryDocument>().Property(x => x.ImpactLevel).HasMaxLength(40);
+        modelBuilder.Entity<RegulatorySourceRun>().HasIndex(x => new { x.OrganizationId, x.StartedAt });
+        modelBuilder.Entity<RegulatorySourceRun>().Property(x => x.SourceKey).HasMaxLength(80);
+        modelBuilder.Entity<RegulatorySourceRun>().Property(x => x.SourceName).HasMaxLength(180);
+        modelBuilder.Entity<RegulatoryMatch>().HasIndex(x => new { x.OrganizationId, x.RegulatoryDocumentId, x.CompanyId }).IsUnique();
+        modelBuilder.Entity<RegulatoryMatch>().HasIndex(x => new { x.OrganizationId, x.CompanyId });
 
         SeedPlans(modelBuilder);
     }
