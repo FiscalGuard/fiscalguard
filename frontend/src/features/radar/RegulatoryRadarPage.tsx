@@ -1,4 +1,4 @@
-import { Building2, ExternalLink, Newspaper, RefreshCw, Scale, ShieldCheck, Sparkles } from 'lucide-react';
+import { Activity, Building2, Database, ExternalLink, Newspaper, RefreshCw, Scale, ShieldCheck, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
@@ -40,8 +40,10 @@ export function RegulatoryRadarPage() {
     return <div className="rounded-md border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">Não foi possível carregar o radar. {error}</div>;
   }
 
-  const officialAlerts = data.alerts.filter((alert) => alert.sourceType.toLowerCase().includes('oficial')).length;
   const impactedCompanies = data.alerts.reduce((total, alert) => total + alert.affectedCompaniesCount, 0);
+  const diagnostics = data.diagnostics ?? [];
+  const documentsFound = diagnostics.reduce((total, item) => total + item.documentsFound, 0);
+  const documentsAccepted = diagnostics.reduce((total, item) => total + item.documentsAccepted, 0);
 
   return (
     <div className="space-y-5">
@@ -58,14 +60,23 @@ export function RegulatoryRadarPage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         <RadarMetric icon={Newspaper} label="Fontes monitoradas" value={data.source} />
-        <RadarMetric icon={Scale} label="Temas monitorados" value={String(data.monitoredThemes.length)} />
-        <RadarMetric icon={ShieldCheck} label="Atos e notícias oficiais" value={String(officialAlerts)} />
-        <RadarMetric icon={Sparkles} label="Cruzamentos com a carteira" value={String(impactedCompanies)} />
+        <RadarMetric icon={Scale} label="Documentos lidos" value={`${documentsFound} lidos / ${documentsAccepted} aceitos`} />
+        <RadarMetric icon={ShieldCheck} label="Evidências salvas" value={String(data.documentsStored ?? 0)} />
+        <RadarMetric icon={Sparkles} label="Cruzamentos com a carteira" value={`${impactedCompanies} agora / ${data.matchesStored ?? 0} histórico`} />
       </section>
-      {/* <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-fiscal-navy">
-        Radar atualizado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
-        {data.fromCache && data.cachedUntil ? `, usando cache válido até ${new Date(data.cachedUntil).toLocaleTimeString('pt-BR')}` : ', consultando a fonte oficial nesta atualização'}.
-      </div> */}
+
+      <section className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-fiscal-navy">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Radar atualizado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
+            {data.fromCache && data.cachedUntil ? `, usando cache válido até ${new Date(data.cachedUntil).toLocaleTimeString('pt-BR')}` : ', consultando as fontes oficiais nesta atualização'}.
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-1 text-xs font-semibold text-fiscal-blue">
+            <Activity size={14} /> Motor auditável
+          </span>
+        </div>
+        <p className="mt-2 leading-6 text-slate-600">{data.matchingModel}</p>
+      </section>
 
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="font-semibold text-fiscal-ink">Temas acompanhados</h2>
@@ -76,10 +87,36 @@ export function RegulatoryRadarPage() {
         </div>
       </section>
 
+      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-2 font-semibold text-fiscal-ink">
+          <Database size={18} className="text-fiscal-blue" /> Diagnóstico das fontes
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {diagnostics.map((item) => (
+            <div key={`${item.sourceKey}-${item.startedAt}`} className="rounded-md border border-slate-100 bg-slate-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-fiscal-navy">{item.sourceName}</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.durationMs} ms</div>
+                </div>
+                <span className={`rounded-md px-2 py-1 text-xs font-semibold ${item.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                  {item.success ? 'Online' : 'Falha'}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <MiniStat label="Lidos" value={item.documentsFound} />
+                <MiniStat label="Aceitos" value={item.documentsAccepted} />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{item.error || item.statusMessage || 'Consulta registrada.'}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="space-y-3">
         {data.alerts.length === 0 && (
           <div className="rounded-md border border-slate-200 bg-white p-5 text-sm text-slate-600">
-            Nenhuma publicação foi retornada pelas fontes oficiais para os temas configurados. Clique em <strong>Atualizar radar</strong> para forçar uma nova consulta externa; se continuar vazio, aumente `RegulatoryRadar__LookbackDays` ou revise os temas em `RegulatoryRadar:Themes`.
+            Nenhuma publicação passou pelos filtros atuais. O diagnóstico acima mostra se as fontes responderam, quantos documentos foram lidos e quantos foram aceitos pelo motor. Para ampliar a cobertura, revise os temas monitorados, aumente a janela de busca ou cadastre tags mais específicas nas empresas da carteira.
           </div>
         )}
         {data.alerts.map((alert) => (
@@ -114,7 +151,8 @@ export function RegulatoryRadarPage() {
                   {alert.affectedCompanies.map((company) => (
                     <Link key={`${alert.id}-${company.id}`} to={`/app/empresas/${company.id}`} className="block rounded-md bg-slate-50 p-3 hover:bg-slate-100">
                       <div className="font-semibold text-fiscal-navy">{company.legalName}</div>
-                      <div className="text-xs text-slate-500">{company.cnpj} - {company.reason}</div>
+                      <div className="text-xs text-slate-500">{company.cnpj} - aderência {company.score}/100 - {company.reason}</div>
+                      <div className="mt-1 text-xs text-fiscal-blue">Termos: {company.matchedTerms}</div>
                     </Link>
                   ))}
                   {alert.affectedCompaniesCount > alert.affectedCompanies.length && (
@@ -129,6 +167,15 @@ export function RegulatoryRadarPage() {
           </article>
         ))}
       </section>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md bg-white p-2 ring-1 ring-slate-100">
+      <div className="text-[11px] uppercase text-slate-400">{label}</div>
+      <div className="font-semibold text-fiscal-navy">{value}</div>
     </div>
   );
 }

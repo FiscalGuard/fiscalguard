@@ -160,7 +160,24 @@ export interface RegulatoryRadarSummary {
   fromCache: boolean;
   cachedUntil?: string;
   monitoredThemes: string[];
+  diagnostics: RegulatorySourceDiagnostic[];
+  documentsStored: number;
+  matchesStored: number;
+  matchingModel: string;
   alerts: RegulatoryAlert[];
+}
+
+export interface RegulatorySourceDiagnostic {
+  sourceKey: string;
+  sourceName: string;
+  success: boolean;
+  documentsFound: number;
+  documentsAccepted: number;
+  durationMs: number;
+  error?: string;
+  statusMessage?: string;
+  startedAt: string;
+  finishedAt?: string;
 }
 
 export interface RegulatoryAlert {
@@ -185,6 +202,8 @@ export interface RegulatoryAffectedCompany {
   legalName: string;
   cnpj: string;
   reason: string;
+  score: number;
+  matchedTerms: string;
 }
 
 export interface Organization {
